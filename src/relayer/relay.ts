@@ -1,6 +1,6 @@
 import { Subject, mergeMap } from 'rxjs';
 import { AxelarClient, EvmClient, DatabaseClient } from '../clients';
-import { axelarChain, cosmosChains, evmChains } from '../config';
+import { axelarChain, cosmosChains, env, evmChains } from '../config';
 import {
   ContractCallSubmitted,
   ContractCallWithTokenSubmitted,
@@ -38,6 +38,8 @@ import {
 } from '../handler';
 import { createCosmosEventSubject, createEvmEventSubject } from './subject';
 import { filterCosmosDestination, mapEventToEvmClient } from './rxOperators';
+import { logger } from '../logger';
+import { MultiversXListener } from '../listeners/MultiversXListener/MultiversXListener';
 
 const sEvmCallContract = createEvmEventSubject<ContractCallEventObject>();
 const sEvmCallContractWithToken = createEvmEventSubject<ContractCallWithTokenEventObject>();
@@ -198,4 +200,14 @@ export async function startRelayer() {
   axelarListener.listen(AxelarCosmosContractCallWithTokenEvent, sCosmosContractCallWithToken);
   axelarListener.listen(AxelarIBCCompleteEvent, sCosmosApproveAny);
   axelarListener.listen(AxelarEVMCompletedEvent, sEvmConfirmEvent);
+
+  // Listening for MultiversX events
+  try {
+    const multiversXListener = new MultiversXListener();
+
+    await multiversXListener.listenToMultiversXEvents();
+  } catch (e) {
+    logger.error('Could not listen to MultiversX events');
+    logger.error(e);
+  }
 }

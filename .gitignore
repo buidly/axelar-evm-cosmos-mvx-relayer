@@ -6,3 +6,5 @@ src/types/contracts
 *.log
 secret.json
 unused
+
+docker-compose.override.yml
