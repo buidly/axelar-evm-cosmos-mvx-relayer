@@ -14,6 +14,7 @@ export const env = {
   LOG_LEVEL: process.env.LOG_LEVEL || "info",
   MULTIVERSX_NOTIFIER_URL: process.env.MULTIVERSX_NOTIFIER_URL || '',
   MULTIVERSX_GATEWAY_ADDRESS: process.env.MULTIVERSX_GATEWAY_ADDRESS || '',
+  MULTIVERSX_CHAIN_ID: process.env.MULTIVERSX_CHAIN_ID || '',
 };
 
 export * from './chains';

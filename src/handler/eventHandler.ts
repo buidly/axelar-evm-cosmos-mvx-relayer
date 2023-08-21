@@ -1,4 +1,4 @@
-import { AxelarClient, DatabaseClient, EvmClient } from '..';
+import { AxelarClient, cosmosChains, DatabaseClient, EvmClient } from '..';
 import { logger } from '../logger';
 import {
   ContractCallSubmitted,
@@ -15,6 +15,7 @@ import {
   ContractCallApprovedEventObject,
   ContractCallEventObject,
 } from '../types/contracts/IAxelarGateway';
+import { filterCosmosDestination } from '../relayer/rxOperators';
 
 const getBatchCommandIdFromSignTx = (signTx: any) => {
   const rawLog = JSON.parse(signTx.rawLog || '{}');
@@ -273,6 +274,79 @@ export async function handleCosmosToEvmCallContractWithTokenCompleteEvent(
 
 export async function handleEvmToCosmosCompleteEvent(client: AxelarClient, event: IBCPacketEvent) {
   logger.info(`[handleEvmToCosmosCompleteEvent] Memo: ${event.memo}`);
+}
+
+// TODO: This is all very much WIP and probably won't work :)
+export async function handleMvxToEvmOrCosmosEvent(
+  vxClient: AxelarClient,
+  evmClients: EvmClient[],
+  messageId: string,
+  payload: string,
+  sourceChain: string,
+  destinationChain: string,
+) {
+  const isCosmosDestination = cosmosChains.map((chain) => chain.chainId).includes(destinationChain);
+
+  if (isCosmosDestination) {
+    // TODO: This expects a EVM txHash instead of this messageId, not sure how to handle it.
+    const confirmTx = await vxClient.confirmEvmTx(sourceChain, messageId);
+    if (confirmTx) {
+      logger.info(`[handleEvmToCosmosEvent] Confirmed: ${confirmTx.transactionHash}`);
+    }
+
+    return;
+  }
+
+  // TODO: Should also support other destination chains in the future
+  const evmClient = evmClients.find(
+    (client) => client.chainId.toLowerCase() === destinationChain.toLowerCase()
+  );
+
+  // If no evm client found, return
+  if (!evmClient) return;
+
+  // TODO: This should contain the source_address, source_chain, destination_address, destination_chain, payload_hash
+  // For the Gateway contract running on Axelar CosmWASM. Are those passed through the payload?
+  const routeMessage = await vxClient.routeMessageRequest(
+    -1,
+    messageId,
+    payload
+  );
+
+  if (routeMessage) {
+    logger.info(`[handleMvxToEvmEvent] RouteMessage: ${routeMessage.transactionHash}`);
+  }
+
+  const pendingCommands = await vxClient.getPendingCommands(destinationChain);
+
+  logger.info(`[handleMvxToEvmEvent] PendingCommands: ${JSON.stringify(pendingCommands)}`);
+  if (pendingCommands.length === 0) return;
+
+  const signCommand = await vxClient.signCommands(destinationChain);
+  logger.debug(`[handleMvxToEvmEvent] SignCommand: ${JSON.stringify(signCommand)}`);
+
+  if (signCommand && signCommand.rawLog?.includes('failed')) {
+    throw new Error(signCommand.rawLog);
+  }
+  if (!signCommand) {
+    throw new Error('cannot sign command');
+  }
+
+  const batchedCommandId = getBatchCommandIdFromSignTx(signCommand);
+  logger.info(`[handleMvxToEvmEvent] BatchCommandId: ${batchedCommandId}`);
+
+  const executeData = await vxClient.getExecuteDataFromBatchCommands(
+    destinationChain,
+    batchedCommandId
+  );
+
+  logger.info(`[handleMvxToEvmEvent] BatchCommands: ${JSON.stringify(executeData)}`);
+
+  const tx = await evmClient.gatewayExecute(executeData);
+  if (!tx) return;
+  logger.info(`[handleMvxToEvmEvent] Execute: ${tx.transactionHash}`);
+
+  return tx;
 }
 
 export async function prepareHandler(event: any, db: DatabaseClient, label = '') {

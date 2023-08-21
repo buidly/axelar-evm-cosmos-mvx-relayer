@@ -14,6 +14,8 @@ import {
 } from '../types/contracts/IAxelarGateway';
 import { logger } from '../logger';
 import { ethers } from 'ethers';
+import { NotifierEvent } from '../listeners/MultiversXListener/types';
+import { Address } from '@multiversx/sdk-core/out';
 
 export class DatabaseClient {
   private prisma: PrismaClient;
@@ -253,6 +255,24 @@ export class DatabaseClient {
       },
     });
     logger.info(`[DBUpdate] ${JSON.stringify(executeDb)}`);
+  }
+
+  createMvxCallContractEvent(event: NotifierEvent, messageId: string, sourceChain: string, destinationChain: any, payload: string, payloadHash: any, destinationContractAddress: any, sender: string) {
+    return this.prisma.relayData.create({
+      data: {
+        id: messageId,
+        from: sourceChain,
+        to: destinationChain,
+        callContract: {
+          create: {
+            payload: payload.toLowerCase(),
+            payloadHash: payloadHash.toLowerCase(),
+            contractAddress: destinationContractAddress.toLowerCase(),
+            sourceAddress: sender.toLowerCase(),
+          },
+        },
+      },
+    });
   }
 
   connect() {

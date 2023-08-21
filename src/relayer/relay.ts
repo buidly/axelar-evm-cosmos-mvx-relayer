@@ -203,7 +203,7 @@ export async function startRelayer() {
 
   // Listening for MultiversX events
   try {
-    const multiversXListener = new MultiversXListener();
+    const multiversXListener = new MultiversXListener(db, axelarClient, evmClients);
 
     await multiversXListener.listenToMultiversXEvents();
   } catch (e) {
